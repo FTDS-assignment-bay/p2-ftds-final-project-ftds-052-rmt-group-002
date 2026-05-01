@@ -56,26 +56,6 @@ export const sidebarItems: NavGroup[] = [
         url: "/dashboard/default",
         icon: LayoutDashboard,
       },
-      {
-        title: "CRM",
-        url: "/dashboard/crm",
-        icon: ChartBar,
-      },
-      {
-        title: "Finance",
-        url: "/dashboard/finance",
-        icon: Banknote,
-      },
-      {
-        title: "Analytics",
-        url: "/dashboard/analytics",
-        icon: Gauge,
-      },
-      {
-        title: "Productivity",
-        url: "/dashboard/productivity",
-        icon: ListTodo,
-      },
     ],
   },
   {
@@ -113,17 +93,6 @@ export const sidebarItems: NavGroup[] = [
         icon: FlaskConical,
         isNew: true,
         comingSoon: true,
-      },
-      {
-        title: "Authentication",
-        url: "/auth",
-        icon: Fingerprint,
-        subItems: [
-          { title: "Login v1", url: "/auth/v1/login", newTab: true },
-          { title: "Login v2", url: "/auth/v2/login", newTab: true },
-          { title: "Register v1", url: "/auth/v1/register", newTab: true },
-          { title: "Register v2", url: "/auth/v2/register", newTab: true },
-        ],
       },
     ],
   },
@@ -219,17 +188,36 @@ export const sidebarItems: NavGroup[] = [
           { title: "Finance V1", url: "/dashboard/finance-v1" },
         ],
       },
-    ],
-  },
-  {
-    id: 8,
-    label: "Misc",
-    items: [
       {
-        title: "Others",
-        url: "/dashboard/coming-soon",
-        icon: SquareArrowUpRight,
-        comingSoon: true,
+        title: "Authentication",
+        url: "/auth",
+        icon: Fingerprint,
+        subItems: [
+          { title: "Login v1", url: "/auth/v1/login", newTab: true },
+          { title: "Login v2", url: "/auth/v2/login", newTab: true },
+          { title: "Register v1", url: "/auth/v1/register", newTab: true },
+          { title: "Register v2", url: "/auth/v2/register", newTab: true },
+        ],
+      },
+      {
+        title: "CRM",
+        url: "/dashboard/crm",
+        icon: ChartBar,
+      },
+      {
+        title: "Finance",
+        url: "/dashboard/finance",
+        icon: Banknote,
+      },
+      {
+        title: "Analytics",
+        url: "/dashboard/analytics",
+        icon: Gauge,
+      },
+      {
+        title: "Productivity",
+        url: "/dashboard/productivity",
+        icon: ListTodo,
       },
     ],
   },
