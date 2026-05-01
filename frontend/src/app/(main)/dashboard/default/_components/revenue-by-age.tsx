@@ -14,11 +14,11 @@ const chartConfig = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (n: number) =>
-  `₺${n.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}`;
+  `₺ ${n.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}`;
 
 const fmtShort = (n: number) => {
-  if (n >= 1_000_000) return `₺${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `₺${(n / 1_000).toFixed(0)}K`;
+  if (n >= 1_000_000) return `₺ ${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `₺ ${(n / 1_000).toFixed(0)}K`;
   return fmt(n);
 };
 

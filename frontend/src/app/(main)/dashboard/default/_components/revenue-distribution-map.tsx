@@ -35,7 +35,7 @@ let cachedGeoJson: unknown = null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (n: number) =>
-  `₺${n.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}`;
+  `₺ ${n.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}`;
 
 function getColor(revenue: number, max: number): string {
   if (revenue <= 0 || max <= 0) return "#f1f1f1";
