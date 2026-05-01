@@ -5,12 +5,12 @@
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-async function apiFetch<T>(path: string, params?: Record<string, string>): Promise<T> {
+async function apiFetch<T>(path: string, params?: Record<string, string>, signal?: AbortSignal): Promise<T> {
   const url = new URL(path, BASE_URL);
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   }
-  const res = await fetch(url.toString(), { cache: "no-store" });
+  const res = await fetch(url.toString(), { cache: "no-store", signal });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`API ${res.status}: ${text}`);
@@ -56,26 +56,55 @@ export interface CategoryGenderPoint {
 export interface RevenueTrendData {
   start_date: string;
   end_date: string;
+  granularity: "day" | "week";
   trend: RevenueTrendPoint[];
   category_gender: CategoryGenderPoint[];
 }
 
+export interface CityRevenuePoint {
+  city: string;
+  total_revenue: number;
+}
+
+export interface CityRevenueData {
+  data: CityRevenuePoint[];
+}
+
+export interface AgeGroupPoint {
+  age_group: string;
+  total_revenue: number;
+  avg_revenue: number;
+  order_count: number;
+}
+
+export interface AgeRevenueData {
+  data: AgeGroupPoint[];
+}
+
 // ─── Endpoints ────────────────────────────────────────────────
 
-export function fetchDateRange(): Promise<DateRangeData> {
-  return apiFetch<DateRangeData>("/dashboard/date-range");
+export function fetchDateRange(signal?: AbortSignal): Promise<DateRangeData> {
+  return apiFetch<DateRangeData>("/dashboard/date-range", undefined, signal);
 }
 
-export function fetchKpi(startDate?: string, endDate?: string): Promise<KpiData> {
+export function fetchKpi(startDate?: string, endDate?: string, signal?: AbortSignal): Promise<KpiData> {
   const params: Record<string, string> = {};
   if (startDate) params.start_date = startDate;
-  if (endDate)   params.end_date   = endDate;
-  return apiFetch<KpiData>("/dashboard/kpi", Object.keys(params).length ? params : undefined);
+  if (endDate) params.end_date = endDate;
+  return apiFetch<KpiData>("/dashboard/kpi", Object.keys(params).length ? params : undefined, signal);
 }
 
-export function fetchRevenueTrend(startDate?: string, endDate?: string): Promise<RevenueTrendData> {
+export function fetchRevenueTrend(startDate?: string, endDate?: string, signal?: AbortSignal): Promise<RevenueTrendData> {
   const params: Record<string, string> = {};
   if (startDate) params.start_date = startDate;
-  if (endDate)   params.end_date   = endDate;
-  return apiFetch<RevenueTrendData>("/dashboard/revenue-trend", Object.keys(params).length ? params : undefined);
+  if (endDate) params.end_date = endDate;
+  return apiFetch<RevenueTrendData>("/dashboard/revenue-trend", Object.keys(params).length ? params : undefined, signal);
+}
+
+export function fetchCityRevenue(signal?: AbortSignal): Promise<CityRevenueData> {
+  return apiFetch<CityRevenueData>("/dashboard/revenue-by-city", undefined, signal);
+}
+
+export function fetchAgeRevenue(signal?: AbortSignal): Promise<AgeRevenueData> {
+  return apiFetch<AgeRevenueData>("/dashboard/revenue-by-age", undefined, signal);
 }

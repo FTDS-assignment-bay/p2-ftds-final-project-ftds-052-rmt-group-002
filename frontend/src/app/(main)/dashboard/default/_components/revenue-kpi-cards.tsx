@@ -49,10 +49,16 @@ function TrendBadge({ change }: { change: number }) {
 // ─── Main Component ───────────────────────────────────────────
 
 export function RevenueKpiCards() {
+  // date range
+  const [minDate, setMinDate] = useState<Date | null>(null);
   const [maxDate, setMaxDate] = useState<Date | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | null>(null);
-  const [loadingDateRange, setLoadingDateRange] = useState(true);
+
+  // kpi data
   const [data, setData] = useState<KpiData | null>(null);
+
+  // loading & error
+  const [loadingDateRange, setLoadingDateRange] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,13 +66,16 @@ export function RevenueKpiCards() {
   useEffect(() => {
     fetchDateRange()
       .then((r) => {
+        const min = parseDate(r.min_date);
         const max = parseDate(r.max_date);
+        setMinDate(min);
         setMaxDate(max);
         setDateRange({ from: subDays(max, 29), to: max });
       })
       .catch(() => {
         const fallback = new Date();
         fallback.setHours(0, 0, 0, 0);
+        setMinDate(null);
         setMaxDate(fallback);
         setDateRange({ from: subDays(fallback, 29), to: fallback });
         setError("Gagal memuat rentang tanggal dari server, menggunakan tanggal hari ini sebagai fallback.");
@@ -91,7 +100,7 @@ export function RevenueKpiCards() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header + date range picker */}
-      <div className="flex flex-col gaap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-medium">
             {maxDate ? format(maxDate, "EEEE, dd MMMM yyyy") : "—"}
@@ -104,8 +113,9 @@ export function RevenueKpiCards() {
           {dateRange && maxDate && (
             <DateRangePicker
               value={dateRange}
-              onChange={setDateRange}
-              disabled={{ after: maxDate }}
+              onChange={(value) => setDateRange(value ?? null)}
+              minDate={minDate ?? undefined}
+              maxDate={maxDate ?? undefined}
             />
           )}
           {prevFrom && prevTo && (

@@ -1,21 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { fetchAgeRevenue, type AgeGroupPoint } from "@/lib/api";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Separator } from "@/components/ui/separator";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-type AgeGroupPoint = {
-  age_group: string;
-  total_revenue: number;
-  avg_revenue: number;
-  order_count: number;
-};
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-const API_URL = "http://localhost:8000/dashboard/revenue-by-age";
 
 // ── Chart config ──────────────────────────────────────────────────────────────
 const chartConfig = {
@@ -36,33 +26,30 @@ const fmtCount = (n: number) => n.toLocaleString("tr-TR");
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function AgeRevenueCard() {
+  // --- state ---
   const [data, setData] = useState<AgeGroupPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [metric, setMetric] = useState<"total_revenue" | "avg_revenue" | "order_count">("total_revenue");
-  const abortRef = useRef<AbortController | null>(null);
 
+  // --- effects ---
   useEffect(() => {
-    abortRef.current = new AbortController();
-    const { signal } = abortRef.current;
+    const controller = new AbortController();
 
     setLoading(true);
     setError(null);
 
-    fetch(API_URL, { signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+    fetchAgeRevenue(controller.signal)
       .then((json) => setData(json.data))
       .catch((err: Error) => {
         if (err.name !== "AbortError") setError(err.message);
       })
       .finally(() => setLoading(false));
 
-    return () => abortRef.current?.abort();
+    return () => controller.abort();
   }, []);
 
+  // --- derived values ---
   const metricLabel: Record<typeof metric, string> = {
     total_revenue: "Total Revenue",
     avg_revenue: "Avg Order Value",
@@ -80,12 +67,14 @@ export function AgeRevenueCard() {
     value: d[metric] as number,
   }));
 
+  // --- helpers ---
   const tickFormatter = (val: number) =>
     metric === "order_count" ? fmtCount(val) : fmtShort(val);
 
   const formatFull = (val: number) =>
     metric === "order_count" ? fmtCount(val) : fmt(val);
 
+  // --- render ---
   return (
     <Card className="col-span-1 xl:col-span-1">
       <CardHeader>

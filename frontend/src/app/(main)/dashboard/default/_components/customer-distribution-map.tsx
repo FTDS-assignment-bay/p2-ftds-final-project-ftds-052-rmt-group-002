@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Feature } from "geojson";
-import { AgeRevenueCard } from "./AgeRevenueCard";
+import type { Path } from "leaflet";
+import { fetchCityRevenue } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -18,14 +19,8 @@ declare global {
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type CityRevenueData = Record<string, number>;
-
-type GeoLayer = {
-  on: (events: object) => void;
-  bindTooltip: (content: string, options: object) => void;
-  setStyle: (style: object) => void;
-  bringToFront: () => void;
-};
+type CityRevenueMap = Record<string, number>;
+type GeoLayer = Path;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const NAME_MAP: Record<string, string> = {
@@ -36,8 +31,7 @@ const NAME_MAP: Record<string, string> = {
 
 const TURKEY_GEOJSON_URL =
   "https://raw.githubusercontent.com/alpers/Turkey-Maps-GeoJSON/master/tr-cities.json";
-
-const API_URL = "http://localhost:8000/dashboard/revenue-by-city";
+let cachedGeoJson: unknown = null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (n: number) =>
@@ -93,16 +87,19 @@ function loadLeaflet(onLoad: () => void): () => void {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function CustomerDistributionMap() {
+  // --- refs ---
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<ReturnType<typeof window.L.map> | null>(null);
-  const geoLayerRef = useRef<ReturnType<typeof window.L.geoJSON> | null>(null);
+  const geoLayerRef = useRef<ReturnType<typeof window.L.geoJSON<any>> | null>(null);
 
-  const [cityData, setCityData] = useState<CityRevenueData>({});
+  // --- state ---
+  const [cityData, setCityData] = useState<CityRevenueMap>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [legendOpen, setLegendOpen] = useState(true);
 
+  // --- derived values ---
   const sortedCities = Object.entries(cityData).sort((a, b) => b[1] - a[1]);
   const max = sortedCities[0]?.[1] ?? 1;
   const totalRevenue = Object.values(cityData).reduce((sum, v) => sum + v, 0);
@@ -110,21 +107,23 @@ export function CustomerDistributionMap() {
 
   // ── Effect 1: Fetch revenue data ───────────────────────────────────────────
   useEffect(() => {
-    fetch(API_URL)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+    const controller = new AbortController();
+
+    fetchCityRevenue(controller.signal)
       .then((json) => {
-        const mapped: CityRevenueData = {};
+        const mapped: CityRevenueMap = {};
         for (const item of json.data) {
           const geoName = NAME_MAP[item.city] ?? item.city;
           mapped[geoName] = item.total_revenue;
         }
         setCityData(mapped);
       })
-      .catch((err: Error) => setError(err.message))
+      .catch((err: Error) => {
+        if (err.name !== "AbortError") setError(err.message);
+      })
       .finally(() => setLoading(false));
+
+    return () => controller.abort();
   }, []);
 
   // ── Effect 2: Init Leaflet map (once) ─────────────────────────────────────
@@ -170,9 +169,12 @@ export function CustomerDistributionMap() {
     const currentMax = entries[0]?.[1] ?? 1;
     const controller = new AbortController();
 
-    fetch(TURKEY_GEOJSON_URL, { signal: controller.signal })
-      .then((r) => r.json())
+    (cachedGeoJson
+      ? Promise.resolve(cachedGeoJson)
+      : fetch(TURKEY_GEOJSON_URL, { signal: controller.signal }).then((r) => r.json())
+    )
       .then((geojson) => {
+        cachedGeoJson = geojson;
         if (!mapInstanceRef.current) return;
 
         const layer = window.L.geoJSON(geojson, {
@@ -211,7 +213,7 @@ export function CustomerDistributionMap() {
         });
 
         layer.addTo(map);
-        geoLayerRef.current = layer;
+        geoLayerRef.current = layer as any;
       })
       .catch((err: Error) => {
         if (err.name !== "AbortError") console.error(err);
@@ -222,122 +224,115 @@ export function CustomerDistributionMap() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs sm:grid-cols-2 xl:grid-cols-5">
+    <Card className="col-span-1 xl:col-span-4">
+      <CardHeader>
+        <CardTitle className="leading-none">Revenue Distribution by City</CardTitle>
+        <CardDescription>
+          {loading ? (
+            "Loading data..."
+          ) : error ? (
+            <span className="text-destructive">Failed to load: {error}</span>
+          ) : (
+            <>
+              Total revenue{" "}
+              <span className="font-medium text-foreground">{fmt(totalRevenue)}</span>{" "}
+              across {Object.keys(cityData).length} cities — highest in{" "}
+              <span className="font-medium text-foreground">{topCity?.[0]}</span>{" "}
+              ({fmt(topCity?.[1] ?? 0)})
+            </>
+          )}
+        </CardDescription>
+      </CardHeader>
 
-      {/* ── Revenue distribution by cities ── */}
-      <Card className="col-span-1 xl:col-span-4">
-        <CardHeader>
-          <CardTitle className="leading-none">Revenue Distribution by City</CardTitle>
-          <CardDescription>
-            {loading ? (
-              "Loading data..."
-            ) : error ? (
-              <span className="text-destructive">Failed to load: {error}</span>
-            ) : (
-              <>
-                Total revenue <span className="font-medium text-foreground">{fmt(totalRevenue)}</span> across {Object.keys(cityData).length} cities
-                —{" "} highest in{" "}
-                <span className="font-medium text-foreground">{topCity?.[0]}</span>{" "}
-                ({fmt(topCity?.[1] ?? 0)})
-              </>
-            )}
-          </CardDescription>
-        </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div
+          className="relative overflow-hidden rounded-lg border bg-card text-card-foreground"
+          style={{ height: "420px" }}
+        >
+          {(loading || error) && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/50">
+              <span className={`text-sm ${error ? "text-destructive" : "text-muted-foreground"}`}>
+                {error ? "Failed to load data" : "Loading map data..."}
+              </span>
+            </div>
+          )}
 
-        <CardContent className="flex flex-col gap-4">
-          <div
-            className="relative overflow-hidden rounded-lg border bg-card text-card-foreground"
-            style={{ height: "420px" }}
-          >
-            {(loading || error) && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/50">
-                <span className={`text-sm ${error ? "text-destructive" : "text-muted-foreground"}`}>
-                  {error ? "Failed to load data" : "Loading map data..."}
-                </span>
+          <div ref={mapRef} className="h-full w-full" />
+
+          {/* Legend */}
+          <div className="absolute bottom-4 left-4 z-[1000] rounded-lg border bg-card/95 shadow-md backdrop-blur-sm">
+            <button
+              onClick={() => setLegendOpen((v) => !v)}
+              className="flex w-full items-center justify-between gap-4 px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground"
+            >
+              Revenue by City
+              <span className="text-xs">{legendOpen ? "▲" : "▼"}</span>
+            </button>
+
+            {legendOpen && (
+              <div className="max-h-64 overflow-y-auto px-3 pb-2.5">
+                <div className="flex flex-col gap-1.5">
+                  {sortedCities.map(([city, revenue], index) => (
+                    <div key={city} className="flex items-center gap-2">
+                      <div
+                        className="size-3 shrink-0 rounded-sm border border-white/20"
+                        style={{ background: getColor(revenue, max) }}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        #{index + 1} {city}
+                      </span>
+                      <span className="ml-auto text-xs font-medium tabular-nums text-foreground">
+                        {fmt(revenue)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
-
-            <div ref={mapRef} className="h-full w-full" />
-
-            {/* Legend */}
-            <div className="absolute bottom-4 left-4 z-[1000] rounded-lg border bg-card/95 shadow-md backdrop-blur-sm">
-              <button
-                onClick={() => setLegendOpen((v) => !v)}
-                className="flex w-full items-center justify-between gap-4 px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground"
-              >
-                Revenue by City
-                <span className="text-xs">{legendOpen ? "▲" : "▼"}</span>
-              </button>
-
-              {legendOpen && (
-                <div className="max-h-64 overflow-y-auto px-3 pb-2.5">
-                  <div className="flex flex-col gap-1.5">
-                    {sortedCities.map(([city, revenue], index) => (
-                      <div key={city} className="flex items-center gap-2">
-                        <div
-                          className="size-3 shrink-0 rounded-sm border border-white/20"
-                          style={{ background: getColor(revenue, max) }}
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          #{index + 1} {city}
-                        </span>
-                        <span className="ml-auto text-xs font-medium tabular-nums text-foreground">
-                          {fmt(revenue)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
-        </CardContent>
+        </div>
+      </CardContent>
 
-        <style>{`
-        .sw-leaflet-tooltip {
-          background: #ffffff !important;
-          border: 1px solid #e2e8f0 !important;
-          border-radius: 8px !important;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
-          padding: 0 !important;
-        }
-        .sw-leaflet-tooltip::before { display: none !important; }
-        .sw-tooltip {
-          padding: 10px 12px;
-          min-width: 160px;
-          font-family: inherit;
-        }
-        .sw-tooltip-title {
-          font-weight: 600;
-          font-size: 13px;
-          color: #111111;
-          margin-bottom: 6px;
-          border-bottom: 1px solid #e2e8f0;
-          padding-bottom: 6px;
-        }
-        .sw-tooltip-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 16px;
-          font-size: 12px;
-          color: #666666;
-          margin-top: 4px;
-        }
-        .sw-tooltip-row strong {
-          color: #111111;
-          font-weight: 600;
-        }
-        .leaflet-container {
-          background: transparent !important;
-          font-family: inherit;
-        }
-      `}</style>
-      </Card>
-
-      {/* ── Revenue distribution by age categories ── */}
-      <AgeRevenueCard />
-    </div>
-
+      <style>{`
+          .sw-leaflet-tooltip {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+            padding: 0 !important;
+          }
+          .sw-leaflet-tooltip::before { display: none !important; }
+          .sw-tooltip {
+            padding: 10px 12px;
+            min-width: 160px;
+            font-family: inherit;
+          }
+          .sw-tooltip-title {
+            font-weight: 600;
+            font-size: 13px;
+            color: #111111;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 6px;
+          }
+          .sw-tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            font-size: 12px;
+            color: #666666;
+            margin-top: 4px;
+          }
+          .sw-tooltip-row strong {
+            color: #111111;
+            font-weight: 600;
+          }
+          .leaflet-container {
+            background: transparent !important;
+            font-family: inherit;
+          }
+        `}</style>
+    </Card>
   );
 }
