@@ -58,7 +58,10 @@ export interface RevenueTrendData {
   end_date: string;
   granularity: "day" | "week";
   trend: RevenueTrendPoint[];
-  category_gender: CategoryGenderPoint[];
+}
+
+export interface CategoryGenderData {
+  data: CategoryGenderPoint[];
 }
 
 export interface CityRevenuePoint {
@@ -99,6 +102,10 @@ export function fetchRevenueTrend(startDate?: string, endDate?: string, signal?:
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;
   return apiFetch<RevenueTrendData>("/dashboard/revenue-trend", Object.keys(params).length ? params : undefined, signal);
+}
+
+export function fetchCategoryGender(signal?: AbortSignal): Promise<CategoryGenderData> {
+  return apiFetch<CategoryGenderData>("/dashboard/category-gender", undefined, signal);
 }
 
 export function fetchCityRevenue(signal?: AbortSignal): Promise<CityRevenueData> {

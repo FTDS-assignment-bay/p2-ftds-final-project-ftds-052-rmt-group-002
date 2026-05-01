@@ -123,7 +123,14 @@ export function AgeRevenueCard() {
             accessibilityLayer
           >
             <CartesianGrid vertical={false} />
-            <XAxis dataKey="age_group" tickLine={false} tickMargin={10} axisLine={false} />
+            <XAxis
+              dataKey="age_group"
+              tickLine={false}
+              tickMargin={10}
+              axisLine={false}
+              interval={0}
+              tick={{ fontSize: 11 }}
+            />
             <YAxis
               axisLine={false}
               tickLine={false}
