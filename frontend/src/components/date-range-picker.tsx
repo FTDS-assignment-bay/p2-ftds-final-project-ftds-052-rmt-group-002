@@ -32,19 +32,28 @@ export function DateRangePicker({
   prevFrom,
   prevTo,
 }: DateRangePickerProps) {
+  // --- state ---
   const [open, setOpen] = React.useState(false);
   const [internalDateRange, setInternalDateRange] = React.useState<DateRange | undefined>(() => {
     const to = new Date();
     const from = subDays(to, 29);
     return { from, to };
   });
+  const [calendarMonth, setCalendarMonth] = React.useState<Date | undefined>(
+    () => value?.from ?? subDays(new Date(), 29)
+  );
+  const [activePreset, setActivePreset] = React.useState<Preset | undefined>(undefined);
 
+  // --- derived values ---
   const dateRange = value ?? internalDateRange;
   const anchor = maxDate ?? new Date();
 
+  // --- handlers ---
   const handleDateChange = (nextValue: DateRange | undefined) => {
-    if (!value) setInternalDateRange(nextValue);
-    onChange?.(nextValue);
+    const safeValue = nextValue ?? dateRange;
+    if (!value) setInternalDateRange(safeValue);
+    setActivePreset(undefined);
+    onChange?.(safeValue);
   };
 
   function applyPreset(preset: Preset) {
@@ -64,9 +73,12 @@ export function DateRangePicker({
         break;
     }
     handleDateChange(next);
+    setCalendarMonth(next.from);
+    setActivePreset(preset);
     setOpen(false);
   }
 
+  // --- render ---
   const triggerLabel = dateRange?.from
     ? dateRange.to
       ? `${format(dateRange.from, "d MMM yyyy")} - ${format(dateRange.to, "d MMM yyyy")}`
@@ -84,18 +96,24 @@ export function DateRangePicker({
         <PopoverContent className="w-auto overflow-hidden p-0" align="end">
           {/* Preset buttons */}
           <div className="flex gap-1 border-b px-3 py-2">
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => applyPreset("7d")}>7d</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => applyPreset("30d")}>30d</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => applyPreset("mtd")}>MTD</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => applyPreset("ytd")}>YTD</Button>
+            <Button variant={activePreset === "7d" ? "secondary" : "ghost"} size="sm" className="h-7 text-xs" onClick={() => applyPreset("7d")}>7d</Button>
+            <Button variant={activePreset === "30d" ? "secondary" : "ghost"} size="sm" className="h-7 text-xs" onClick={() => applyPreset("30d")}>30d</Button>
+            <Button variant={activePreset === "mtd" ? "secondary" : "ghost"} size="sm" className="h-7 text-xs" onClick={() => applyPreset("mtd")}>MTD</Button>
+            <Button variant={activePreset === "ytd" ? "secondary" : "ghost"} size="sm" className="h-7 text-xs" onClick={() => applyPreset("ytd")}>YTD</Button>
           </div>
           <Calendar
             mode="range"
-            defaultMonth={dateRange?.from}
+            month={calendarMonth}
+            onMonthChange={setCalendarMonth}
             selected={dateRange}
             onSelect={handleDateChange}
             numberOfMonths={2}
-            disabled={disabled}
+            showOutsideDays={false}
+            disabled={[
+              ...(Array.isArray(disabled) ? disabled : disabled ? [disabled] : []),
+              ...(minDate ? [{ before: minDate }] : []),
+              ...(maxDate ? [{ after: maxDate }] : []),
+            ]}
           />
         </PopoverContent>
       </Popover>
