@@ -1,0 +1,340 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  user: "${AIRFLOW_UID}:0"
+  env_file:
+    - .env
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./data:/opt/airflow/data
+    - ./docs:/opt/airflow/docs
+    - ./logs:/opt/airflow/logs
+    - ./models:/opt/airflow/models
+    - ./notebooks:/opt/airflow/notebooks
+    - ./plugins:/opt/airflow/plugins
+    - ./src:/opt/airflow/src
+    - /var/run/docker.sock:/var/run/docker.sock
+  networks:
+    - staywise-network
+
+x-airflow-depends: &airflow-depends
+  depends_on:
+    postgres-airflow:
+      condition: service_healthy
+    airflow-init:
+      condition: service_completed_successfully
+
+services:
+
+  # ─── Databases ────────────────────────────────────────────────
+
+  postgres-airflow:
+    image: postgres:16
+    container_name: postgres-airflow
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${AIRFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME}
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    networks:
+      - staywise-network
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "${AIRFLOW_DB_USER}" ]
+      interval: 5s
+      retries: 5
+
+  postgres-mlflow:
+    image: postgres:16
+    container_name: postgres-mlflow
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${MLFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${MLFLOW_DB_PASSWORD}
+      POSTGRES_DB: ${MLFLOW_DB_NAME}
+    volumes:
+      - postgres_mlflow_data:/var/lib/postgresql/data
+    networks:
+      - staywise-network
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "${MLFLOW_DB_USER}" ]
+      interval: 5s
+      retries: 5
+
+  postgres-dw:
+    image: timescale/timescaledb:latest-pg16
+    container_name: postgres-dw
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DW_DB_USER}
+      POSTGRES_PASSWORD: ${DW_DB_PASSWORD}
+      POSTGRES_DB: ${DW_DB_NAME}
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_dw_data:/var/lib/postgresql/data
+    networks:
+      - staywise-network
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "${DW_DB_USER}", "-d", "${DW_DB_NAME}" ]
+      interval: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    env_file:
+      - .env
+    environment:
+      MONGO_INITDB_DATABASE: social_sentiment
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./config/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - staywise-network
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - staywise-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      retries: 5
+
+  # ─── Kafka ────────────────────────────────────────────────────
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - staywise-network
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "2181" ]
+      interval: 10s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - staywise-network
+    healthcheck:
+      test: [ "CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list" ]
+      interval: 15s
+      retries: 5
+
+  # ─── Airflow ──────────────────────────────────────────────────
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p \
+          /opt/airflow/dags \
+          /opt/airflow/data \
+          /opt/airflow/docs \
+          /opt/airflow/logs \
+          /opt/airflow/models \
+          /opt/airflow/notebooks \
+          /opt/airflow/plugins \
+          /opt/airflow/src
+        exec /entrypoint airflow version
+
+  airflow-scheduler:
+    <<: [ *airflow-common, *airflow-depends ]
+    container_name: airflow-scheduler
+    restart: on-failure
+    command: scheduler
+
+  airflow-webserver:
+    <<: [ *airflow-common, *airflow-depends ]
+    container_name: airflow-webserver
+    ports:
+      - "8080:8080"
+    restart: always
+    command: webserver
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+
+  # ─── MLflow ───────────────────────────────────────────────────
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
+    container_name: mlflow
+    env_file:
+      - .env
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres-mlflow:
+        condition: service_healthy
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    networks:
+      - staywise-network
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://${MLFLOW_DB_USER}:${MLFLOW_DB_PASSWORD}@postgres-mlflow/${MLFLOW_DB_NAME} --default-artifact-root mlflow-artifacts:/ --artifacts-destination /mlflow/artifacts --serve-artifacts
+
+  # ─── Simulator ────────────────────────────────────────────────
+  # Container standby — jalanin manual via:
+  #   docker exec -it simulator /bin/bash /app/src/simulator/entrypoint.sh
+
+  simulator:
+    build:
+      context: .
+      dockerfile: src/simulator/Dockerfile
+    container_name: simulator
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      POSTGRES_HOST: ${DW_DB_HOST}
+      POSTGRES_DB: ${DW_DB_NAME}
+      POSTGRES_USER: ${DW_DB_USER}
+      POSTGRES_PASSWORD: ${DW_DB_PASSWORD}
+      SIMULATOR_MODE: "batch"
+      BATCH_SIZE: "1000"
+      BATCH_INTERVAL: "20"
+      DATA_PATH: "/app/data/feed_2650.csv"
+      AIRFLOW_HOST: ${AIRFLOW_HOST}
+      AIRFLOW_PORT: ${AIRFLOW_PORT}
+      AIRFLOW_USER: ${AIRFLOW_USER}
+      AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres-dw:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    networks:
+      - staywise-network
+    command: [ "tail", "-f", "/dev/null" ]
+
+  # ─── API ──────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: staywise-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres-dw:
+        condition: service_healthy
+    networks:
+      - staywise-network
+
+  # ─── Kafka Producers & Consumers ──────────────────────────────
+
+  producer:
+    build: .
+    container_name: producer
+    env_file:
+      - .env
+    environment:
+      DUMMY_MODE: "true"
+    command: python ingestion/kafka_dummy_stream.py producer --bootstrap kafka:29092 --speed 5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+    networks:
+      - staywise-network
+
+  consumer:
+    build: .
+    container_name: consumer
+    env_file:
+      - .env
+    environment:
+      DUMMY_MODE: "true"
+    command: python ingestion/kafka_dummy_stream.py consumer --bootstrap kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+    networks:
+      - staywise-network
+
+  # ─── pgAdmin ──────────────────────────────────────────────────
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    env_file:
+      - .env
+    environment:
+      PGADMIN_SERVER_JSON_FILE: /var/lib/pgadmin/servers.json
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./src/db/pgadmin-entrypoint.sh:/pgadmin-entrypoint.sh
+    entrypoint: /bin/sh /pgadmin-entrypoint.sh
+    networks:
+      - staywise-network
+
+volumes:
+  postgres_airflow_data:
+  postgres_mlflow_data:
+  postgres_dw_data:
+  redis_data:
+  mlflow_artifacts:
+  pgadmin_data:
+  mongo_data:
+
+networks:
+  staywise-network:
+    driver: bridge
