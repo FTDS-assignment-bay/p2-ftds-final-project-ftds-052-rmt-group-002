@@ -1,0 +1,19 @@
+FROM staywise/base:3.11
+
+WORKDIR /app
+
+COPY docker/requirements/sentiment.txt .
+RUN pip install --no-cache-dir -r sentiment.txt
+
+# Pre-download models saat build (opsional, bikin image lebih besar tapi startup lebih cepat)
+# RUN python -c "from transformers import pipeline; pipeline('text-classification', model='mdhugol/indonesia-bert-sentiment-classifier')"
+
+COPY config/ ./config/
+COPY src/ingestion/ ./ingestion/
+COPY src/workers/ ./workers/
+COPY data/sentimen-dummy-data/ ./data/sentimen-dummy-data/
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+CMD ["python", "workers/celery_app.py"]

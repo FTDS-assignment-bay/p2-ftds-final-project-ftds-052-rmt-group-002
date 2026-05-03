@@ -1,0 +1,8 @@
+FROM staywise/base:3.11
+
+WORKDIR /app
+
+COPY docker/requirements/mlflow.txt .
+RUN pip install --no-cache-dir --timeout=300 -r mlflow.txt
+
+EXPOSE 5000

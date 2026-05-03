@@ -1,0 +1,45 @@
+# ─── Environment & Secrets ───
+.env
+*.key
+*.pem
+
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# ─── Jupyter ───
+.ipynb_checkpoints/
+
+# ─── Data & Models ───
+data/
+!data/sentimen-dummy-data/
+models/
+
+# ─── Docker ───
+*.resolved.yml
+
+# ─── Airflow ───
+logs/
+
+# ─── Archived ───
+archived/
+
+# ─── OS & IDE ───
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# ─── Misc ───
+*.log
+*.tmp
+
+# ─── PgAdmin ───
+src/db/pgadmin-entrypoint.sh
