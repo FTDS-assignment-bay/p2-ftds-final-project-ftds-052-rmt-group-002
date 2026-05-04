@@ -86,6 +86,8 @@ services:
       - "5434:5432"
     volumes:
       - postgres_dw_data:/var/lib/postgresql/data
+      - ./src/db/staywise/01_staywise_schema.sql:/docker-entrypoint-initdb.d/01_staywise.sql:ro
+      - ./src/db/sentiment/01_sentiment_schema.sql:/docker-entrypoint-initdb.d/02_sentiment.sql:ro
     networks:
       - staywise-network
     healthcheck:
@@ -362,7 +364,7 @@ services:
       SIMULATOR_MODE: "batch"
       BATCH_SIZE: "1000"
       BATCH_INTERVAL: "20"
-      DATA_PATH: "/app/data/feed_2650.csv"
+      DATA_PATH: "/app/data/feed_2679.csv"
       AIRFLOW_HOST: ${AIRFLOW_HOST}
       AIRFLOW_PORT: ${AIRFLOW_PORT}
       AIRFLOW_USER: ${AIRFLOW_USER}
@@ -385,6 +387,8 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: pgadmin
+    env_file:
+    - .env 
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
