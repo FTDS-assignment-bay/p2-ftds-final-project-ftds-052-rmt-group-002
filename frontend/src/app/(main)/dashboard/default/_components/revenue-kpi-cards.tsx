@@ -100,16 +100,15 @@ export function RevenueKpiCards() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header + date range picker */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm font-medium">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-3xl tracking-tight">Executive Summary</h1>
+          <p className="text-muted-foreground text-sm">
             {maxDate ? format(maxDate, "EEEE, dd MMMM yyyy") : "—"}
           </p>
-          <p className="text-xs text-muted-foreground">
-            KPI comparison with previous period (same duration)
-          </p>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex flex-col items-end gap-1">
           {dateRange && maxDate && (
             <DateRangePicker
               value={dateRange}

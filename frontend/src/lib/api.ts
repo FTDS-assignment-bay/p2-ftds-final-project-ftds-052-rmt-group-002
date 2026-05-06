@@ -84,6 +84,44 @@ export interface AgeRevenueData {
   data: AgeGroupPoint[];
 }
 
+export interface CustomerListRow {
+  customer_id: string;
+  full_name: string | null;
+  churn_probability: number | null;
+  risk_segment: string | null;
+  predicted_clv_90d: number | null;
+  segment_name: string | null;
+  recency_days: number | null;
+  frequency: number | null;
+  monetary_total: number | null;
+}
+
+export interface CustomerDetail {
+  customer_id: string;
+  full_name: string | null;
+  age: number | null;
+  gender: string | null;
+  city: string | null;
+  first_seen_date: string | null;
+  churn_probability: number | null;
+  risk_segment: string | null;
+  predicted_clv_90d: number | null;
+  segment_name: string | null;
+  model_version: string | null;
+  predicted_at: string | null;
+  recency_days: number | null;
+  frequency: number | null;
+  monetary_total: number | null;
+  monetary_avg: number | null;
+  preferred_category: string | null;
+  preferred_device: string | null;
+  preferred_payment: string | null;
+}
+
+export interface CustomerCountData {
+  total: number;
+}
+
 // ─── Endpoints ────────────────────────────────────────────────
 
 export function fetchDateRange(signal?: AbortSignal): Promise<DateRangeData> {
@@ -114,4 +152,25 @@ export function fetchCityRevenue(signal?: AbortSignal): Promise<CityRevenueData>
 
 export function fetchAgeRevenue(signal?: AbortSignal): Promise<AgeRevenueData> {
   return apiFetch<AgeRevenueData>("/dashboard/revenue-by-age", undefined, signal);
+}
+
+export function fetchCustomerList(
+  riskSegment?: string,
+  limit = 1000,
+  offset = 0,
+  signal?: AbortSignal
+): Promise<CustomerListRow[]> {
+  const params: Record<string, string> = { limit: String(limit), offset: String(offset) };
+  if (riskSegment) params.risk_segment = riskSegment;
+  return apiFetch<CustomerListRow[]>("/customers/list", params, signal);
+}
+
+export function fetchCustomerCount(riskSegment?: string, signal?: AbortSignal): Promise<CustomerCountData> {
+  const params: Record<string, string> = {};
+  if (riskSegment) params.risk_segment = riskSegment;
+  return apiFetch<CustomerCountData>("/customers/count", Object.keys(params).length ? params : undefined, signal);
+}
+
+export function fetchCustomerDetail(customerId: string, signal?: AbortSignal): Promise<CustomerDetail> {
+  return apiFetch<CustomerDetail>(`/customers/${customerId}`, undefined, signal);
 }

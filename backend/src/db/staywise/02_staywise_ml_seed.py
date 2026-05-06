@@ -35,9 +35,9 @@ CSV_PATH = "../../../data/seed_initial_ml_inference.csv"
 
 # ── Helpers ──────────────────────────────────────────────────────
 def derive_risk_segment(churn_prob: float) -> str:
-    if churn_prob >= 0.7:
+    if churn_prob >= 0.55: # for experimental data (default : 0.7)
         return "high"
-    elif churn_prob >= 0.4:
+    elif churn_prob >= 0.45:  # for experimental data (default : 0.4)
         return "medium"
     return "low"
 

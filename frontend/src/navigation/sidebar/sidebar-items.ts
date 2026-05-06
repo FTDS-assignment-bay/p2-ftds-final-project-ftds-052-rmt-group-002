@@ -1,3 +1,5 @@
+import React from "react";
+
 import {
   Activity,
   AlertTriangle,
@@ -21,10 +23,12 @@ import {
   Zap,
 } from "lucide-react";
 
+import { OwlIcon } from "@/components/icons/owl-icon";
+
 export interface NavSubItem {
   title: string;
   url: string;
-  icon?: LucideIcon;
+  icon?: LucideIcon | React.FC<React.SVGProps<SVGSVGElement>>;
   comingSoon?: boolean;
   newTab?: boolean;
   isNew?: boolean;
@@ -33,7 +37,7 @@ export interface NavSubItem {
 export interface NavMainItem {
   title: string;
   url: string;
-  icon?: LucideIcon;
+  icon?: LucideIcon | React.FC<React.SVGProps<SVGSVGElement>>;
   subItems?: NavSubItem[];
   comingSoon?: boolean;
   newTab?: boolean;
@@ -66,117 +70,74 @@ export const sidebarItems: NavGroup[] = [
         title: "Churn Predictions",
         url: "/dashboard/churn",
         icon: AlertTriangle,
-        comingSoon: true,
       },
       {
         title: "Customer Segments",
         url: "/dashboard/segments",
         icon: Users,
-        comingSoon: true,
-      },
-      {
-        title: "Retention Actions",
-        url: "/dashboard/retention",
-        icon: RefreshCw,
-        comingSoon: true,
       },
       {
         title: "Social Sentiment",
         url: "/dashboard/sentiment",
         icon: MessageSquare,
         isNew: true,
-        comingSoon: true,
+      },
+      {
+        title: "Customer List",
+        url: "/dashboard/customer-list",
+        icon: FlaskConical,
+        isNew: true,
+      },
+    ],
+  },
+
+  {
+    id: 3,
+    label: "Retention Action",
+    items: [
+      {
+        title: "Campaign Hub",
+        url: "/dashboard/retention",
+        icon: RefreshCw,
       },
       {
         title: "Retention Testing",
         url: "/dashboard/retention-testing",
         icon: FlaskConical,
         isNew: true,
-        comingSoon: true,
       },
     ],
   },
-  {
-    id: 3,
-    label: "ML Pipeline",
-    items: [
-      {
-        title: "Model Registry",
-        url: "/dashboard/models",
-        icon: Brain,
-        comingSoon: true,
-      },
-      {
-        title: "Experiments",
-        url: "/dashboard/experiments",
-        icon: FlaskConical,
-        comingSoon: true,
-      },
-      {
-        title: "Drift Monitoring",
-        url: "/dashboard/drift",
-        icon: Activity,
-        isNew: true,
-        comingSoon: true,
-      },
-      {
-        title: "Pipeline Status",
-        url: "/dashboard/pipeline",
-        icon: Zap,
-        comingSoon: true,
-      },
-    ],
-  },
+
   {
     id: 4,
-    label: "Data",
+    label: "AI Assistant",
     items: [
       {
-        title: "Data Warehouse",
-        url: "/dashboard/warehouse",
-        icon: Database,
-        comingSoon: true,
-      },
-      {
-        title: "Data Quality",
-        url: "/dashboard/data-quality",
-        icon: ShieldCheck,
-        comingSoon: true,
+        title: "WiseAI",
+        url: "/dashboard/ai-analyst",
+        icon: OwlIcon,
+        isNew: true,
       },
     ],
   },
   {
     id: 5,
-    label: "AI Assistant",
-    items: [
-      {
-        title: "WiseAI",
-        url: "/dashboard/analyst",
-        icon: Brain,
-        isNew: true,
-        comingSoon: true,
-      },
-    ],
-  },
-  {
-    id: 6,
     items: [
       {
         title: "Documentation",
         url: "/dashboard/docs",
         icon: BookOpen,
-        comingSoon: true,
       },
       {
         title: "About",
         url: "/dashboard/about",
         icon: Info,
-        comingSoon: true,
       },
     ],
   },
   {
-    id: 7,
+    id: 6,
     label: "Legacy",
     items: [
       {
@@ -186,38 +147,21 @@ export const sidebarItems: NavGroup[] = [
           { title: "Default V1", url: "/dashboard/default-v1" },
           { title: "CRM V1", url: "/dashboard/crm-v1" },
           { title: "Finance V1", url: "/dashboard/finance-v1" },
+          { title: "CRM", url: "/dashboard/crm" },
+          { title: "Finance", url: "/dashboard/finance" },
+          { title: "Analytics", url: "/dashboard/analytics" },
+          { title: "Productivity", url: "/dashboard/productivity" },
         ],
       },
       {
         title: "Authentication",
         url: "/auth",
-        icon: Fingerprint,
         subItems: [
           { title: "Login v1", url: "/auth/v1/login", newTab: true },
           { title: "Login v2", url: "/auth/v2/login", newTab: true },
           { title: "Register v1", url: "/auth/v1/register", newTab: true },
           { title: "Register v2", url: "/auth/v2/register", newTab: true },
         ],
-      },
-      {
-        title: "CRM",
-        url: "/dashboard/crm",
-        icon: ChartBar,
-      },
-      {
-        title: "Finance",
-        url: "/dashboard/finance",
-        icon: Banknote,
-      },
-      {
-        title: "Analytics",
-        url: "/dashboard/analytics",
-        icon: Gauge,
-      },
-      {
-        title: "Productivity",
-        url: "/dashboard/productivity",
-        icon: ListTodo,
       },
     ],
   },
