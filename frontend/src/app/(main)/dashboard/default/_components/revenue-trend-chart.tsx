@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { format, parseISO, subDays } from "date-fns";
+import { format, parseISO } from "date-fns";
+import { type DateRange } from "react-day-picker";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { fetchDateRange, fetchRevenueTrend, type RevenueTrendData } from "@/lib/api";
+import { fetchRevenueTrend, type RevenueTrendData } from "@/lib/api";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtRevenue(v: number) {
@@ -16,7 +15,7 @@ function fmtRevenue(v: number) {
 }
 
 function isoDate(d: Date): string {
-  return d.toISOString().split("T")[0];
+  return format(d, "yyyy-MM-dd");
 }
 
 function fmtTick(dateStr: string, granularity: "day" | "week"): string {
@@ -47,73 +46,40 @@ const trendConfig = {
   orders: { label: "Orders", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-type TimeRange = "7d" | "30d" | "90d";
-
-const TIME_RANGE_DAYS: Record<TimeRange, number> = {
-  "7d": 7,
-  "30d": 30,
-  "90d": 90,
-};
-
-const TIME_RANGE_LABELS: Record<TimeRange, string> = {
-  "7d": "Last 7 days",
-  "30d": "Last 30 days",
-  "90d": "Last 3 months",
-};
+// ── Props ─────────────────────────────────────────────────────────────────────
+interface Props {
+  dateRange: DateRange;
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function RevenueTrendChart() {
-  // --- state ---
-  const [maxDate, setMaxDate] = useState<string | null>(null);
-  const [timeRange, setTimeRange] = useState<TimeRange>("90d");
+export function RevenueTrendChart({ dateRange }: Props) {
   const [trendData, setTrendData] = useState<RevenueTrendData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dateError, setDateError] = useState<string | null>(null);
-  const [trendError, setTrendError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // --- effects ---
-  // Effect 1: fetch max date once on mount
   useEffect(() => {
-    const controller = new AbortController();
-
-    fetchDateRange(controller.signal)
-      .then((r) => setMaxDate(r.max_date))
-      .catch(() => {
-        setMaxDate(isoDate(new Date()));
-        setDateError("Gagal memuat rentang tanggal, menampilkan data hari ini sebagai fallback.");
-      });
-
-    return () => controller.abort();
-  }, []);
-
-  // Effect 2: fetch trend whenever maxDate or timeRange changes
-  useEffect(() => {
-    if (!maxDate) return;
+    if (!dateRange?.from || !dateRange?.to) return;
 
     const controller = new AbortController();
-    const end = maxDate;
-    const days = TIME_RANGE_DAYS[timeRange];
-    const start = isoDate(subDays(parseISO(maxDate), days - 1));
+    const start = isoDate(dateRange.from);
+    const end = isoDate(dateRange.to);
 
     setLoading(true);
-    setTrendError(null);
+    setError(null);
 
     fetchRevenueTrend(start, end, controller.signal)
       .then(setTrendData)
       .catch((e: Error) => {
-        if (e.name !== "AbortError") setTrendError(e.message);
+        if (e.name !== "AbortError") setError(e.message);
       })
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [maxDate, timeRange]);
+  }, [dateRange]);
 
-  // --- derived values ---
   const granularity = trendData?.granularity ?? "day";
   const peakDay = trendData?.trend.reduce((a, b) => (b.revenue > a.revenue ? b : a));
 
-  // --- render ---
   return (
     <Card className="col-span-1 xl:col-span-3">
       <CardHeader>
@@ -130,41 +96,10 @@ export function RevenueTrendChart() {
             </>
           )}
         </CardDescription>
-
-        <CardAction>
-          <ToggleGroup
-            type="single"
-            value={timeRange}
-            onValueChange={(v) => v && setTimeRange(v as TimeRange)}
-            variant="outline"
-            className="@[767px]/card:flex hidden *:data-[slot=toggle-group-item]:px-4!"
-          >
-            {Object.entries(TIME_RANGE_LABELS).map(([value, label]) => (
-              <ToggleGroupItem key={value} value={value}>{label}</ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
-            <SelectTrigger
-              className="@[767px]/card:hidden flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
-              size="sm"
-              aria-label="Select time range"
-            >
-              <SelectValue placeholder="Last 3 months" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectGroup>
-                {Object.entries(TIME_RANGE_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value} className="rounded-lg">{label}</SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </CardAction>
       </CardHeader>
 
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        {dateError && <p className="mb-2 text-sm text-destructive">{dateError}</p>}
-        {trendError && <p className="mb-2 text-sm text-destructive">{trendError}</p>}
+        {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
         {loading ? (
           <div className="h-62 w-full animate-pulse rounded-lg bg-muted" />
         ) : !trendData?.trend.length ? (

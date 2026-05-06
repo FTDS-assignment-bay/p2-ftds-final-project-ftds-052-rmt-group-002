@@ -142,16 +142,25 @@ export function fetchRevenueTrend(startDate?: string, endDate?: string, signal?:
   return apiFetch<RevenueTrendData>("/dashboard/revenue-trend", Object.keys(params).length ? params : undefined, signal);
 }
 
-export function fetchCategoryGender(signal?: AbortSignal): Promise<CategoryGenderData> {
-  return apiFetch<CategoryGenderData>("/dashboard/category-gender", undefined, signal);
+export function fetchCategoryGender(signal?: AbortSignal, startDate?: string, endDate?: string): Promise<CategoryGenderData> {
+  const params: Record<string, string> = {};
+  if (startDate) params.start_date = startDate;
+  if (endDate) params.end_date = endDate;
+  return apiFetch<CategoryGenderData>("/dashboard/category-gender", Object.keys(params).length ? params : undefined, signal);
 }
 
-export function fetchCityRevenue(signal?: AbortSignal): Promise<CityRevenueData> {
-  return apiFetch<CityRevenueData>("/dashboard/revenue-by-city", undefined, signal);
+export function fetchCityRevenue(signal?: AbortSignal, startDate?: string, endDate?: string): Promise<CityRevenueData> {
+  const params: Record<string, string> = {};
+  if (startDate) params.start_date = startDate;
+  if (endDate) params.end_date = endDate;
+  return apiFetch<CityRevenueData>("/dashboard/revenue-by-city", Object.keys(params).length ? params : undefined, signal);
 }
 
-export function fetchAgeRevenue(signal?: AbortSignal): Promise<AgeRevenueData> {
-  return apiFetch<AgeRevenueData>("/dashboard/revenue-by-age", undefined, signal);
+export function fetchAgeRevenue(signal?: AbortSignal, startDate?: string, endDate?: string): Promise<AgeRevenueData> {
+  const params: Record<string, string> = {};
+  if (startDate) params.start_date = startDate;
+  if (endDate) params.end_date = endDate;
+  return apiFetch<AgeRevenueData>("/dashboard/revenue-by-age", Object.keys(params).length ? params : undefined, signal);
 }
 
 export function fetchCustomerList(

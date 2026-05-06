@@ -136,33 +136,33 @@ export const sidebarItems: NavGroup[] = [
       },
     ],
   },
-  {
-    id: 6,
-    label: "Legacy",
-    items: [
-      {
-        title: "Dashboards",
-        url: "/dashboard/default-v1",
-        subItems: [
-          { title: "Default V1", url: "/dashboard/default-v1" },
-          { title: "CRM V1", url: "/dashboard/crm-v1" },
-          { title: "Finance V1", url: "/dashboard/finance-v1" },
-          { title: "CRM", url: "/dashboard/crm" },
-          { title: "Finance", url: "/dashboard/finance" },
-          { title: "Analytics", url: "/dashboard/analytics" },
-          { title: "Productivity", url: "/dashboard/productivity" },
-        ],
-      },
-      {
-        title: "Authentication",
-        url: "/auth",
-        subItems: [
-          { title: "Login v1", url: "/auth/v1/login", newTab: true },
-          { title: "Login v2", url: "/auth/v2/login", newTab: true },
-          { title: "Register v1", url: "/auth/v1/register", newTab: true },
-          { title: "Register v2", url: "/auth/v2/register", newTab: true },
-        ],
-      },
-    ],
-  },
+  // {
+  //   id: 6,
+  //   label: "Legacy",
+  //   items: [
+  //     {
+  //       title: "Dashboards",
+  //       url: "/dashboard/default-v1",
+  //       subItems: [
+  //         { title: "Default V1", url: "/dashboard/default-v1" },
+  //         { title: "CRM V1", url: "/dashboard/crm-v1" },
+  //         { title: "Finance V1", url: "/dashboard/finance-v1" },
+  //         { title: "CRM", url: "/dashboard/crm" },
+  //         { title: "Finance", url: "/dashboard/finance" },
+  //         { title: "Analytics", url: "/dashboard/analytics" },
+  //         { title: "Productivity", url: "/dashboard/productivity" },
+  //       ],
+  //     },
+  //     {
+  //       title: "Authentication",
+  //       url: "/auth",
+  //       subItems: [
+  //         { title: "Login v1", url: "/auth/v1/login", newTab: true },
+  //         { title: "Login v2", url: "/auth/v2/login", newTab: true },
+  //         { title: "Register v1", url: "/auth/v1/register", newTab: true },
+  //         { title: "Register v2", url: "/auth/v2/register", newTab: true },
+  //       ],
+  //     },
+  //   ],
+  // },
 ];

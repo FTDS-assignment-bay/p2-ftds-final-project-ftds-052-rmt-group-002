@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { format } from "date-fns";
+import { type DateRange } from "react-day-picker";
 import { fetchAgeRevenue, type AgeGroupPoint } from "@/lib/api";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Separator } from "@/components/ui/separator";
@@ -24,22 +26,33 @@ const fmtShort = (n: number) => {
 
 const fmtCount = (n: number) => n.toLocaleString("tr-TR");
 
+function isoDate(d: Date): string {
+  return format(d, "yyyy-MM-dd");
+}
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+interface Props {
+  dateRange: DateRange;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
-export function AgeRevenueCard() {
-  // --- state ---
+export function AgeRevenueCard({ dateRange }: Props) {
   const [data, setData] = useState<AgeGroupPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [metric, setMetric] = useState<"total_revenue" | "avg_revenue" | "order_count">("total_revenue");
 
-  // --- effects ---
   useEffect(() => {
+    if (!dateRange?.from || !dateRange?.to) return;
+
     const controller = new AbortController();
+    const start = isoDate(dateRange.from);
+    const end = isoDate(dateRange.to);
 
     setLoading(true);
     setError(null);
 
-    fetchAgeRevenue(controller.signal)
+    fetchAgeRevenue(controller.signal, start, end)
       .then((json) => setData(json.data))
       .catch((err: Error) => {
         if (err.name !== "AbortError") setError(err.message);
@@ -47,9 +60,8 @@ export function AgeRevenueCard() {
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, []);
+  }, [dateRange]);
 
-  // --- derived values ---
   const metricLabel: Record<typeof metric, string> = {
     total_revenue: "Total Revenue",
     avg_revenue: "Avg Order Value",
@@ -67,14 +79,12 @@ export function AgeRevenueCard() {
     value: d[metric] as number,
   }));
 
-  // --- helpers ---
   const tickFormatter = (val: number) =>
     metric === "order_count" ? fmtCount(val) : fmtShort(val);
 
   const formatFull = (val: number) =>
     metric === "order_count" ? fmtCount(val) : fmt(val);
 
-  // --- render ---
   return (
     <Card className="col-span-1 xl:col-span-1">
       <CardHeader>

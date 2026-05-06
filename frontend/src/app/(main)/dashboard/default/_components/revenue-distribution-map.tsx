@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { format } from "date-fns";
+import { type DateRange } from "react-day-picker";
 import type { Feature } from "geojson";
 import type { Path } from "leaflet";
 import { fetchCityRevenue } from "@/lib/api";
@@ -36,6 +38,10 @@ let cachedGeoJson: unknown = null;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (n: number) =>
   `₺ ${n.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}`;
+
+function isoDate(d: Date): string {
+  return format(d, "yyyy-MM-dd");
+}
 
 function getColor(revenue: number, max: number): string {
   if (revenue <= 0 || max <= 0) return "#f1f1f1";
@@ -85,31 +91,40 @@ function loadLeaflet(onLoad: () => void): () => void {
   return () => script.removeEventListener("load", onLoad);
 }
 
+// ── Props ─────────────────────────────────────────────────────────────────────
+interface Props {
+  dateRange: DateRange;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
-export function CustomerDistributionMap() {
-  // --- refs ---
+export function CustomerDistributionMap({ dateRange }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<ReturnType<typeof window.L.map> | null>(null);
   const geoLayerRef = useRef<ReturnType<typeof window.L.geoJSON<any>> | null>(null);
 
-  // --- state ---
   const [cityData, setCityData] = useState<CityRevenueMap>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [legendOpen, setLegendOpen] = useState(true);
 
-  // --- derived values ---
   const sortedCities = Object.entries(cityData).sort((a, b) => b[1] - a[1]);
   const max = sortedCities[0]?.[1] ?? 1;
   const totalRevenue = Object.values(cityData).reduce((sum, v) => sum + v, 0);
   const topCity = sortedCities[0];
 
-  // ── Effect 1: Fetch revenue data ───────────────────────────────────────────
+  // ── Effect 1: Fetch revenue data on dateRange change ───────────────────────
   useEffect(() => {
-    const controller = new AbortController();
+    if (!dateRange?.from || !dateRange?.to) return;
 
-    fetchCityRevenue(controller.signal)
+    const controller = new AbortController();
+    const start = isoDate(dateRange.from);
+    const end = isoDate(dateRange.to);
+
+    setLoading(true);
+    setError(null);
+
+    fetchCityRevenue(controller.signal, start, end)
       .then((json) => {
         const mapped: CityRevenueMap = {};
         for (const item of json.data) {
@@ -124,7 +139,7 @@ export function CustomerDistributionMap() {
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, []);
+  }, [dateRange]);
 
   // ── Effect 2: Init Leaflet map (once) ─────────────────────────────────────
   useEffect(() => {

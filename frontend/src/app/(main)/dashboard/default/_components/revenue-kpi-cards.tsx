@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { subDays, format } from "date-fns";
+import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { BarChart3, DollarSign, ShoppingCart, TrendingDown, TrendingUp, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DateRangePicker } from "@/components/date-range-picker";
-import { fetchKpi, fetchDateRange, type KpiData } from "@/lib/api";
+import { fetchKpi, type KpiData } from "@/lib/api";
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -16,12 +15,10 @@ function fmt(n: number): string {
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-/** Safe date → "yyyy-MM-dd" without timezone shift */
 function toIsoString(d: Date): string {
   return format(d, "yyyy-MM-dd");
 }
 
-/** Parse "yyyy-MM-dd" string from API safely (no timezone shift) */
 function parseDate(s: string): Date {
   return new Date(s + "T00:00:00");
 }
@@ -46,44 +43,19 @@ function TrendBadge({ change }: { change: number }) {
   );
 }
 
+// ─── Props ────────────────────────────────────────────────────
+
+interface Props {
+  dateRange: DateRange;
+}
+
 // ─── Main Component ───────────────────────────────────────────
 
-export function RevenueKpiCards() {
-  // date range
-  const [minDate, setMinDate] = useState<Date | null>(null);
-  const [maxDate, setMaxDate] = useState<Date | null>(null);
-  const [dateRange, setDateRange] = useState<DateRange | null>(null);
-
-  // kpi data
+export function RevenueKpiCards({ dateRange }: Props) {
   const [data, setData] = useState<KpiData | null>(null);
-
-  // loading & error
-  const [loadingDateRange, setLoadingDateRange] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Step 1: fetch max_date from DB, then set initial dateRange
-  useEffect(() => {
-    fetchDateRange()
-      .then((r) => {
-        const min = parseDate(r.min_date);
-        const max = parseDate(r.max_date);
-        setMinDate(min);
-        setMaxDate(max);
-        setDateRange({ from: subDays(max, 29), to: max });
-      })
-      .catch(() => {
-        const fallback = new Date();
-        fallback.setHours(0, 0, 0, 0);
-        setMinDate(null);
-        setMaxDate(fallback);
-        setDateRange({ from: subDays(fallback, 29), to: fallback });
-        setError("Gagal memuat rentang tanggal dari server, menggunakan tanggal hari ini sebagai fallback.");
-      })
-      .finally(() => setLoadingDateRange(false));
-  }, []);
-
-  // Step 2: fetch KPI only when both from & to are selected
   useEffect(() => {
     if (!dateRange?.from || !dateRange?.to) return;
     setLoading(true);
@@ -99,31 +71,12 @@ export function RevenueKpiCards() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Header + date range picker */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl tracking-tight">Executive Summary</h1>
-          <p className="text-muted-foreground text-sm">
-            {maxDate ? format(maxDate, "EEEE, dd MMMM yyyy") : "—"}
-          </p>
-        </div>
-
-        <div className="flex flex-col items-end gap-1">
-          {dateRange && maxDate && (
-            <DateRangePicker
-              value={dateRange}
-              onChange={(value) => setDateRange(value ?? null)}
-              minDate={minDate ?? undefined}
-              maxDate={maxDate ?? undefined}
-            />
-          )}
-          {prevFrom && prevTo && (
-            <p className="text-xs text-muted-foreground">
-              vs. {format(prevFrom, "dd MMM yyyy")} – {format(prevTo, "dd MMM yyyy")}
-            </p>
-          )}
-        </div>
-      </div>
+      {/* Comparison period label */}
+      {/* {prevFrom && prevTo && (
+        <p className="text-xs text-muted-foreground text-right">
+          vs. {format(prevFrom, "dd MMM yyyy")} – {format(prevTo, "dd MMM yyyy")}
+        </p>
+      )} */}
 
       {/* Error state */}
       {error && (
@@ -148,7 +101,7 @@ export function RevenueKpiCards() {
           <CardContent className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <div className="font-medium text-3xl tabular-nums leading-none tracking-tight">
-                {loading || loadingDateRange || !data ? "—" : `₺ ${fmt(Math.round(data.total_revenue))}`}
+                {loading || !data ? "—" : `₺ ${fmt(Math.round(data.total_revenue))}`}
               </div>
               {!loading && data && <TrendBadge change={data.total_revenue_change} />}
             </div>
@@ -169,7 +122,7 @@ export function RevenueKpiCards() {
           <CardContent className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <div className="font-medium text-3xl tabular-nums leading-none tracking-tight">
-                {loading || loadingDateRange || !data ? "—" : `₺ ${fmt(Math.round(data.avg_order_value))}`}
+                {loading || !data ? "—" : `₺ ${fmt(Math.round(data.avg_order_value))}`}
               </div>
               {!loading && data && <TrendBadge change={data.avg_order_value_change} />}
             </div>
@@ -190,7 +143,7 @@ export function RevenueKpiCards() {
           <CardContent className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <div className="font-medium text-3xl tabular-nums leading-none tracking-tight">
-                {loading || loadingDateRange || !data ? "—" : fmt(data.total_orders)}
+                {loading || !data ? "—" : fmt(data.total_orders)}
               </div>
               {!loading && data && <TrendBadge change={data.total_orders_change} />}
             </div>
@@ -211,7 +164,7 @@ export function RevenueKpiCards() {
           <CardContent className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <div className="font-medium text-3xl tabular-nums leading-none tracking-tight">
-                {loading || loadingDateRange || !data ? "—" : fmt(data.active_customers)}
+                {loading || !data ? "—" : fmt(data.active_customers)}
               </div>
               {!loading && data && <TrendBadge change={data.active_customers_change} />}
             </div>
