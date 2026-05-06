@@ -19,8 +19,9 @@ LATEST_RFM_CTE = """
             preferred_device,
             preferred_payment,
             churn_probability,
-            is_churn_predicted,
             risk_segment,
+            predicted_clv_90d,
+            segment_name,
             model_version,
             computed_at
         FROM customer_rfm_daily
