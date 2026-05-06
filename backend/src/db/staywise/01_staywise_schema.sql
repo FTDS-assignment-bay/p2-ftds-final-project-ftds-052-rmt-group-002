@@ -101,14 +101,18 @@ CREATE TABLE IF NOT EXISTS customer_rfm_daily (
     preferred_device     VARCHAR(50),
     preferred_payment    VARCHAR(100),
 
-    -- Churn prediction
-    churn_probability    FLOAT,
-    is_churn_predicted   BOOLEAN,
-    risk_segment         VARCHAR(20),
-    model_version        VARCHAR(50),
+    -- Inference Results (MLflow output)
+    churn_probability     FLOAT,
+    risk_segment          VARCHAR(20),
+    predicted_clv_90d     NUMERIC(14,2),
+    segment_name          VARCHAR(50),
 
-    computed_at          TIMESTAMPTZ  DEFAULT NOW(),
-    PRIMARY KEY (customer_id, snapshot_date)
+    -- Model Traceability (MLflow tracking)
+    model_version         VARCHAR(50),
+    mlflow_run_id         VARCHAR(100),
+    computed_at           TIMESTAMPTZ    DEFAULT NOW(),
+    
+    CONSTRAINT uq_rfm UNIQUE (snapshot_date, customer_id)
 );
 
 -- ── 4. Convert to hypertables ───────────────────────────────────
@@ -174,7 +178,6 @@ SELECT
     time_bucket('1 week', snapshot_date)    AS bucket,
     AVG(churn_probability)                  AS avg_churn_prob,
     MAX(churn_probability)                  AS max_churn_prob,
-    LAST(is_churn_predicted, snapshot_date) AS latest_is_churn,
     LAST(risk_segment, snapshot_date)       AS latest_risk_segment,
     LAST(recency_days, snapshot_date)       AS recency_days,
     LAST(frequency, snapshot_date)          AS frequency,
@@ -185,16 +188,17 @@ FROM customer_rfm_daily
 GROUP BY customer_id, bucket
 WITH NO DATA;
 
--- Weekly risk breakdown across all customers
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_weekly_risk_summary
+-- Daily ml summary all customers
+CREATE MATERIALIZED VIEW mv_daily_ml_summary
 WITH (timescaledb.continuous) AS
 SELECT
-    time_bucket('1 week', snapshot_date)    AS bucket,
-    risk_segment,
-    COUNT(*)                                AS total_customers,
-    AVG(churn_probability)                  AS avg_churn_prob
+    time_bucket('1 day', snapshot_date) AS bucket,
+    AVG(churn_probability) AS avg_expected_churn,
+    COUNT(*) FILTER (WHERE churn_probability > 0.8) AS high_risk_count,
+    SUM(predicted_clv_90d) AS total_projected_revenue
+    -- COUNT(DISTINCT customer_id) AS active_customers
 FROM customer_rfm_daily
-GROUP BY bucket, risk_segment
+GROUP BY bucket
 WITH NO DATA;
 
 -- Refresh policies
@@ -207,10 +211,10 @@ SELECT add_continuous_aggregate_policy(
 );
 
 SELECT add_continuous_aggregate_policy(
-    'mv_weekly_risk_summary',
-    start_offset      => INTERVAL '3 months',
-    end_offset        => INTERVAL '1 hour',
-    schedule_interval => INTERVAL '6 hours',
+    'mv_daily_ml_summary',
+    start_offset      => INTERVAL '3 days',
+    end_offset        => INTERVAL '0 seconds',
+    schedule_interval => INTERVAL '1 hour',
     if_not_exists     => true
 );
 
@@ -221,5 +225,5 @@ CREATE INDEX IF NOT EXISTS idx_mv_rfm_trend_customer_bucket
 CREATE INDEX IF NOT EXISTS idx_mv_rfm_trend_risk
     ON mv_customer_rfm_trend (latest_risk_segment, bucket DESC);
 
-CREATE INDEX IF NOT EXISTS idx_mv_risk_summary_bucket
-    ON mv_weekly_risk_summary (bucket DESC, risk_segment);
+CREATE INDEX IF NOT EXISTS idx_mv_daily_ml_summary_bucket
+    ON mv_daily_ml_summary (bucket DESC);

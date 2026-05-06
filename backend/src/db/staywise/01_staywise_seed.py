@@ -130,7 +130,7 @@ execute_values(
             row["Product_Category"],
             row["Payment_Method"],
             row["Device_Type"],
-            row["Date"].date(),
+            row["Date"].to_pydatetime(),
             int(row["Quantity"]),
             float(row["Unit_Price"]),
             float(row["Discount_Amount"]),
@@ -238,7 +238,7 @@ cur.execute(f"""
         NOW()
     FROM fact_transactions t
     GROUP BY t.customer_id
-    ON CONFLICT (customer_id, snapshot_date) DO UPDATE SET
+    ON CONFLICT ON CONSTRAINT uq_rfm DO UPDATE SET
         recency_days         = EXCLUDED.recency_days,
         frequency            = EXCLUDED.frequency,
         monetary_total       = EXCLUDED.monetary_total,
@@ -258,10 +258,12 @@ print("  customer_rfm_daily seeded ✅")
 # ── 5. Refresh continuous aggregates (initial population) ────────
 conn.commit()
 conn.autocommit = True
-for mv in ["mv_customer_rfm_trend", "mv_weekly_risk_summary"]:
-    cur.execute(f"CALL refresh_continuous_aggregate('{mv}', NULL, NULL);")
-    print(f"  {mv} refreshed ✅")
-conn.autocommit = False
+try:
+    for mv in ["mv_customer_rfm_trend", "mv_daily_ml_summary"]:
+        cur.execute(f"CALL refresh_continuous_aggregate('{mv}', NULL, NULL);")
+        print(f"  {mv} refreshed ✅")
+finally:
+    conn.autocommit = False
 
 # ── 6. Verify ────────────────────────────────────────────────────
 print("\nRow counts:")
@@ -287,6 +289,13 @@ cur.execute("""
 """)
 for row in cur.fetchall():
     print(f"  ✅ {row[0]}: {row[1]} chunk(s)")
+
+print("\nMaterialized view row counts:")
+for mv in ["mv_customer_rfm_trend", "mv_daily_ml_summary"]:
+    cur.execute(f"SELECT COUNT(*) FROM {mv}")
+    count = cur.fetchone()[0]
+    status = "✅" if count > 0 else "⚠️ "
+    print(f"  {status} {mv}: {count:,} rows")
 
 cur.close()
 conn.close()
