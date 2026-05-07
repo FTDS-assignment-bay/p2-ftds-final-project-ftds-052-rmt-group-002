@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-
+import { Separator } from "@/components/ui/separator";
 import { CircleHelp, ClipboardList, Command, Database, File, Search, Settings } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -87,11 +87,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={sidebarItems} />
+        <Separator />
+        <NavMain items={sidebarItems.filter((g) => g.id !== 5)} />
         {/* <NavDocuments items={data.documents} /> */}
         {/* <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
       <SidebarFooter>
+        <NavMain items={sidebarItems.filter((g) => g.id === 5)} />
+        <Separator />
         {/* <SidebarSupportCard /> */}
         <NavUser user={rootUser} />
       </SidebarFooter>

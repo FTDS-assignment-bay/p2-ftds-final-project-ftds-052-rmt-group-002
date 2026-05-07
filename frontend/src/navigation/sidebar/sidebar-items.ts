@@ -1,26 +1,15 @@
 import React from "react";
-
 import {
-  Activity,
-  AlertTriangle,
-  Banknote,
   BookOpen,
-  Brain,
-  ChartBar,
-  Database,
-  Fingerprint,
-  FlaskConical,
+  GitBranch,
   Info,
-  Gauge,
   LayoutDashboard,
-  ListTodo,
   type LucideIcon,
+  List,
+  Megaphone,
   MessageSquare,
-  RefreshCw,
-  SquareArrowUpRight,
-  ShieldCheck,
-  Users,
-  Zap,
+  PieChart,
+  TrendingDown,
 } from "lucide-react";
 
 import { OwlIcon } from "@/components/icons/owl-icon";
@@ -67,30 +56,33 @@ export const sidebarItems: NavGroup[] = [
     label: "Churn Intelligence",
     items: [
       {
-        title: "Churn Predictions",
-        url: "/dashboard/churn",
-        icon: AlertTriangle,
-      },
-      {
         title: "Customer Segments",
         url: "/dashboard/segments",
-        icon: Users,
+        icon: PieChart,
+      },
+      {
+        title: "Churn Overview",
+        url: "/dashboard/churn",
+        icon: TrendingDown,
+      },
+      {
+        title: "Customer List",
+        url: "/dashboard/customer-list",
+        icon: List,
+        isNew: true,
       },
       {
         title: "Social Sentiment",
         url: "/dashboard/sentiment",
         icon: MessageSquare,
         isNew: true,
-      },
-      {
-        title: "Customer List",
-        url: "/dashboard/customer-list",
-        icon: FlaskConical,
-        isNew: true,
+        subItems: [
+          { title: "Sentiment Analysis", url: "/dashboard/sentiment" },
+          { title: "Trending Today", url: "/dashboard/sentiment" },
+        ],
       },
     ],
   },
-
   {
     id: 3,
     label: "Retention Action",
@@ -98,17 +90,20 @@ export const sidebarItems: NavGroup[] = [
       {
         title: "Campaign Hub",
         url: "/dashboard/retention",
-        icon: RefreshCw,
+        icon: Megaphone,
       },
       {
         title: "Retention Testing",
         url: "/dashboard/retention-testing",
-        icon: FlaskConical,
+        icon: GitBranch,
         isNew: true,
+        subItems: [
+          { title: "A/B Testing", url: "/dashboard/retention-testing" },
+          { title: "Uplift Modeling", url: "/dashboard/retention-testing" },
+        ],
       },
     ],
   },
-
   {
     id: 4,
     label: "AI Assistant",
@@ -166,3 +161,6 @@ export const sidebarItems: NavGroup[] = [
   //   ],
   // },
 ];
+
+
+
