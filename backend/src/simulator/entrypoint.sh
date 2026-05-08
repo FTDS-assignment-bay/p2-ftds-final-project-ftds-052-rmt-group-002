@@ -15,4 +15,4 @@ while true; do
   sleep 30
 done
 
-exec python /app/src/simulator/simulator.py
+exec python /app/src/simulator/daily_transaction_ingestion.py

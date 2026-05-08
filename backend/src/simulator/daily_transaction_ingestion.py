@@ -1,5 +1,5 @@
 """
-StayWise ML Platform - Data Simulator v5 (FINAL)
+StayWise ML Platform - Daily Transaction Ingestion v5 (FINAL)
 Redis sebagai intraday buffer queue (FIFO).
 
 Flow:
@@ -307,7 +307,7 @@ def run_batch(df: pd.DataFrame, r: redis.Redis):
 
 
 def main():
-    log.info("=== StayWise ML Simulator v5 (FINAL) ===")
+    log.info("=== StayWise Daily Transaction Ingestion Simulator v5 (FINAL) ===")
     log.info(f"Redis : {REDIS_HOST}:{REDIS_PORT}")
     log.info(f"DB    : {PG_HOST}:{PG_PORT}/{PG_DB}")
 

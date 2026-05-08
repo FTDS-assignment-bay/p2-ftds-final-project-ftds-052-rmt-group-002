@@ -10,6 +10,15 @@ Flow:
       → Great Expectations Validation
       → Data Dump ke Data Warehouse DB
       → Trigger DAG 2 (feature engineering)
+
+CHANGELOG vs v1:
+  [FIX-1] customer_rating: CSV berisi integer (1-5), bukan string categorical.
+          GE check diubah ke expect_column_values_to_be_between(1, 5).
+          Data dump tidak lagi cast ke str().
+  [FIX-2] Format tanggal CSV adalah DD/MM/YYYY, bukan YYYY-MM-DD.
+          Konversi dilakukan di task_data_qc sebelum validasi GE.
+  [FIX-3] pipeline_runs: duration_seconds sekarang dihitung dengan benar
+          dari started_at ke finished_at.
 """
 
 from airflow import DAG
@@ -42,13 +51,11 @@ REDIS_QUEUE = "queue:transactions"
 REDIS_QUEUE_META = "queue:meta"
 REDIS_SIGNAL = "simulator:trigger_pipeline"
 
-# Simpan events ke /tmp bukan XCom supaya tidak blow up Airflow metadata DB
 EVENTS_TMP_DIR = "/tmp/staywise_events"
 
 
 def _get_tmp_path(run_id: str, stage: str) -> str:
     os.makedirs(EVENTS_TMP_DIR, exist_ok=True)
-    # Sanitize run_id supaya aman jadi filename
     safe_run_id = run_id.replace(":", "_").replace("+", "_")
     return f"{EVENTS_TMP_DIR}/{safe_run_id}_{stage}.json"
 
@@ -111,10 +118,10 @@ def task_pull_from_queue(**kwargs):
             break
         events.append(json.loads(raw))
 
-    # Reset signal setelah pull selesai
-    r.set(REDIS_SIGNAL, "0")
+    # Jangan reset signal di sini — signal direset di task_data_dump
+    # setelah dump ke DB benar-benar selesai. Kalau direset di sini,
+    # simulator bisa push batch berikutnya padahal QC/GE/dump masih jalan.
 
-    # Simpan ke /tmp, push path-nya ke XCom
     path = _get_tmp_path(kwargs["run_id"], "raw")
     with open(path, "w") as f:
         json.dump(events, f)
@@ -133,8 +140,13 @@ def task_data_qc(**kwargs):
     """
     Validasi kualitas events yang di-pull dari Redis queue.
     Cek: null values, nilai negatif, tipe data.
-    Baca dari /tmp, tulis hasil ke /tmp baru.
+
+    [FIX-2] Konversi format tanggal DD/MM/YYYY → YYYY-MM-DD dilakukan di sini,
+    sebelum events masuk ke GE validation. Kalau format tidak dikenali,
+    event dianggap gagal QC (issue: invalid_date_format).
     """
+    from datetime import datetime
+
     events_path = kwargs["ti"].xcom_pull(key="events_path")
     if not events_path:
         log.info("Tidak ada events untuk di-QC.")
@@ -153,6 +165,7 @@ def task_data_qc(**kwargs):
         payload = event.get("payload", {})
         issues = []
 
+        # ── Null checks ──────────────────────────────────────────
         for col in [
             "customer_id",
             "transaction_date",
@@ -162,10 +175,32 @@ def task_data_qc(**kwargs):
             if not payload.get(col):
                 issues.append(f"null_{col}")
 
+        # ── Nilai negatif / invalid ──────────────────────────────
         if float(payload.get("total_amount", 0)) < 0:
             issues.append("negative_total_amount")
         if int(payload.get("quantity", 0)) <= 0:
             issues.append("invalid_quantity")
+
+        # ── [FIX-2] Konversi tanggal DD/MM/YYYY → YYYY-MM-DD ────
+        # Dilakukan sebelum GE supaya regex date GE tidak selalu fail.
+        raw_date = payload.get("transaction_date", "")
+        if raw_date and "null_transaction_date" not in issues:
+            converted = None
+            for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+                try:
+                    converted = datetime.strptime(raw_date, fmt).strftime("%Y-%m-%d")
+                    break
+                except ValueError:
+                    continue
+            if converted is None:
+                issues.append("invalid_date_format")
+                log.warning(
+                    f"QC: unrecognized date format '{raw_date}' "
+                    f"for customer {payload.get('customer_id')}"
+                )
+            else:
+                payload["transaction_date"] = converted
+                event["payload"] = payload  # mutate in-place
 
         if issues:
             failed.append({"event": event, "issues": issues})
@@ -202,6 +237,12 @@ def task_great_expectations(**kwargs):
     """
     Validasi data menggunakan Great Expectations.
     Baca dari /tmp qc_passed, tulis ge_passed ke /tmp baru.
+
+    [FIX-1] customer_rating di CSV adalah integer (1-5), bukan string categorical.
+            Expectation diubah dari expect_column_values_to_be_in_set ke
+            expect_column_values_to_be_between(1, 5).
+    [FIX-2] Konversi tanggal sudah dilakukan di task_data_qc, jadi di sini
+            format sudah YYYY-MM-DD dan GE regex check akan berjalan normal.
     """
     import pandas as pd
     import great_expectations as ge
@@ -238,6 +279,8 @@ def task_great_expectations(**kwargs):
 
     # ── Format & type checks ─────────────────────────────────────
     gdf.expect_column_values_to_not_match_regex("customer_id", r"^\s*$")
+    # [FIX-2] Tanggal sudah dikonversi ke YYYY-MM-DD di task_data_qc,
+    # jadi regex dan range check ini sekarang akan berjalan dengan benar.
     gdf.expect_column_values_to_match_regex("transaction_date", r"^\d{4}-\d{2}-\d{2}$")
 
     today = datetime.now().strftime("%Y-%m-%d")
@@ -265,21 +308,11 @@ def task_great_expectations(**kwargs):
     gdf.expect_column_values_to_be_in_set(
         "gender", ["Male", "Female", "Other", "male", "female", "other"]
     )
-    gdf.expect_column_values_to_be_in_set(
-        "customer_rating",
-        [
-            "Poor",
-            "Fair",
-            "Good",
-            "Very Good",
-            "Excellent",
-            "poor",
-            "fair",
-            "good",
-            "very good",
-            "excellent",
-        ],
-    )
+
+    # [FIX-1] customer_rating di CSV adalah integer (1-5), bukan string.
+    # Ganti dari expect_column_values_to_be_in_set ke range check.
+    gdf.expect_column_values_to_be_between("customer_rating", min_value=1, max_value=5)
+
     gdf.expect_column_values_to_be_in_set(
         "device_type", ["Mobile", "Desktop", "Tablet", "mobile", "desktop", "tablet"]
     )
@@ -305,8 +338,6 @@ def task_great_expectations(**kwargs):
                 f"result: {r['result']}"
             )
 
-    # Filter per-row berdasarkan unexpected_index_list dari GE
-    # Kumpulkan index baris yang gagal di expectation manapun
     failed_indices = set()
     for r in all_results:
         if not r["success"]:
@@ -356,9 +387,13 @@ def task_data_dump(**kwargs):
     Insert events yang lolos GE validation ke fact_transactions & raw_events.
     Urutan insert: dim_customers → dim_products/payments/devices → fact_transactions → raw_events
     Idempotent via ON CONFLICT DO NOTHING.
+
+    [FIX-1] customer_rating di-cast ke int (bukan str) sesuai tipe SMALLINT di schema.
+    [FIX-3] pipeline_runs: duration_seconds dihitung dari started_at ke NOW().
     """
     import psycopg2
     import hashlib
+    from datetime import datetime, timezone
     from psycopg2.extras import execute_values
 
     ge_passed_path = kwargs["ti"].xcom_pull(key="ge_passed_path")
@@ -370,6 +405,9 @@ def task_data_dump(**kwargs):
         events = json.load(f)
 
     log.info(f"=== DATA DUMP | inserting {len(events)} events ===")
+
+    # [FIX-3] Catat waktu mulai dump untuk kalkulasi duration_seconds
+    dump_started_at = datetime.now(timezone.utc)
 
     conn = psycopg2.connect(**PG_CONN)
     cur = conn.cursor()
@@ -389,7 +427,7 @@ def task_data_dump(**kwargs):
         if cust_id not in dim_customers:
             dim_customers[cust_id] = {
                 "first_seen_date": tx_date,
-                "full_name": payload.get("full_name"),
+                "full_name": payload.get("full_name"),  # nullable, tidak ada di CSV
                 "age": payload.get("age"),
                 "gender": payload.get("gender"),
                 "city": payload.get("city"),
@@ -413,7 +451,9 @@ def task_data_dump(**kwargs):
                 float(payload["session_duration_minutes"]),
                 int(payload["pages_viewed"]),
                 int(payload["delivery_time_days"]),
-                str(payload["customer_rating"]),
+                # [FIX-1] Cast ke int, sesuai tipe SMALLINT di schema fact_transactions.
+                # CSV berisi integer (1-5), bukan string categorical.
+                int(payload["customer_rating"]),
             )
         )
 
@@ -489,22 +529,45 @@ def task_data_dump(**kwargs):
     )
     log.info(f"raw_events: {len(event_rows)} records")
 
-    # 5. Log pipeline run — status dari ge_summary, bukan hardcode
+    # 5. Log pipeline run
+    # [FIX-3] Hitung duration_seconds dari dump_started_at ke sekarang
+    dump_finished_at = datetime.now(timezone.utc)
+    duration_seconds = (dump_finished_at - dump_started_at).total_seconds()
+
     ge_summary = kwargs["ti"].xcom_pull(key="ge_summary") or {}
     status = "partial" if ge_summary.get("ge_failed", 0) > 0 else "success"
     cur.execute(
-        """INSERT INTO pipeline_runs (dag_id, run_date, rows_processed, status, started_at)
-           VALUES (%s, NOW()::date, %s, %s, NOW())""",
-        ("data_ingestion_dag", len(fact_rows), status),
+        """INSERT INTO pipeline_runs
+           (dag_id, run_date, rows_processed, status, duration_seconds, started_at, finished_at)
+           VALUES (%s, NOW()::date, %s, %s, %s, %s, %s)""",
+        (
+            "data_ingestion_dag",
+            len(fact_rows),
+            status,
+            duration_seconds,
+            dump_started_at,
+            dump_finished_at,
+        ),
     )
 
     conn.commit()
     log.info(
-        f"Dump complete: {len(fact_rows)} transactions | {len(event_rows)} events | status={status}"
+        f"Dump complete: {len(fact_rows)} transactions | {len(event_rows)} events | "
+        f"status={status} | duration={duration_seconds:.2f}s"
     )
 
     cur.close()
     conn.close()
+
+    # Reset Redis signal SETELAH dump ke DB selesai.
+    # Ini yang ditunggu simulator di wait_for_dag_completion() sebelum push batch berikutnya.
+    # Jangan dipindah lebih awal — kalau direset di task_pull_from_queue,
+    # simulator bisa push batch baru padahal QC/GE/dump masih jalan.
+    import redis as _redis
+
+    _r = _redis.Redis(host="redis", port=6379, decode_responses=True)
+    _r.set(REDIS_SIGNAL, "0")
+    log.info("Redis signal reset → '0' (simulator safe to push next batch)")
 
     # Cleanup tmp files setelah dump sukses
     for path in [
@@ -522,13 +585,14 @@ def task_data_dump(**kwargs):
 # ════════════════════════════════════════
 # DAG DEFINITION
 # ════════════════════════════════════════
+from datetime import datetime, timezone
 
 with DAG(
     dag_id="data_ingestion_dag",
     default_args=default_args,
     description="Daily data ingestion: Redis queue → QC → GE Validation → Dump to DW",
-    schedule_interval=None,  # triggered by simulator via REST API
-    start_date=days_ago(1),
+    schedule_interval=None,
+    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),  # ← fixed, bukan days_ago(1)
     catchup=False,
     tags=["ingestion", "daily", "staywise"],
 ) as dag:
@@ -537,7 +601,7 @@ with DAG(
         task_id="sense_marketplace_events",
         poke_interval=60,
         timeout=86400,
-        mode="reschedule",  # fix: tidak block worker slot
+        mode="reschedule",
     )
 
     pull_queue = PythonOperator(
@@ -563,7 +627,7 @@ with DAG(
     trigger_feature_dag = TriggerDagRunOperator(
         task_id="trigger_feature_dag",
         trigger_dag_id="feature_and_refresh_dag",
-        wait_for_completion=False,  # fire and forget
+        wait_for_completion=False,
         conf={"source_run_id": "{{ run_id }}"},
     )
 
