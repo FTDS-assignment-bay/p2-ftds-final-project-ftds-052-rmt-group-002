@@ -77,8 +77,8 @@ export const sidebarItems: NavGroup[] = [
         icon: MessageSquare,
         isNew: true,
         subItems: [
-          { title: "Sentiment Analysis", url: "/dashboard/sentiment" },
-          { title: "Trending Today", url: "/dashboard/sentiment" },
+          { title: "Sentiment Analysis", url: "/dashboard/sentiment/overview" },
+          { title: "Trending Today", url: "/dashboard/sentiment/trending" },
         ],
       },
     ],
